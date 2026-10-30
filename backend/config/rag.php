@@ -36,23 +36,12 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Elasticsearch
-    |--------------------------------------------------------------------------
-    */
-
-    'elasticsearch' => [
-        'url' => env('ELASTICSEARCH_URL', 'http://localhost:9200'),
-        'documents_index' => env('ELASTICSEARCH_DOCUMENTS_INDEX', 'rag_documents'),
-        'chunks_index' => env('ELASTICSEARCH_CHUNKS_INDEX', 'rag_chunks'),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
     | Pinecone
     |--------------------------------------------------------------------------
     |
-    | `host` is optional. When omitted, the host is resolved from the Pinecone
-    | control plane using the index name.
+    | The index is a document index with a single text field that supports
+    | integrated embedding and full-text search. `host` is optional. When it
+    | is omitted, the host is resolved from the control plane.
     |
     */
 
@@ -60,8 +49,13 @@ return [
         'api_key' => env('PINECONE_API_KEY'),
         'index' => env('PINECONE_INDEX'),
         'host' => env('PINECONE_HOST'),
+        'namespace' => env('PINECONE_NAMESPACE', '__default__'),
+        'text_field' => env('PINECONE_TEXT_FIELD', 'chunk_text'),
+        'embedding_model' => env('PINECONE_EMBEDDING_MODEL', 'llama-text-embed-v2'),
+        'embedding_dimensions' => (int) env('PINECONE_EMBEDDING_DIMENSIONS', 1024),
         'cloud' => env('PINECONE_CLOUD', 'aws'),
         'region' => env('PINECONE_REGION', 'us-east-1'),
+        'delete_timeout' => (int) env('PINECONE_DELETE_TIMEOUT', 60),
     ],
 
     /*
@@ -69,16 +63,13 @@ return [
     | Hugging Face
     |--------------------------------------------------------------------------
     |
-    | The router exposes an OpenAI-compatible API under `/v1`.
+    | The router exposes an OpenAI-compatible chat completions API under /v1.
     |
     */
 
     'huggingface' => [
         'api_key' => env('HUGGINGFACE_API_KEY'),
         'base_url' => env('HUGGINGFACE_BASE_URL', 'https://router.huggingface.co'),
-        'embedding_model' => env('HUGGINGFACE_EMBEDDING_MODEL', 'sentence-transformers/all-MiniLM-L6-v2'),
-        'embedding_dimensions' => (int) env('HUGGINGFACE_EMBEDDING_DIMENSIONS', 384),
-        'embedding_batch_size' => (int) env('HUGGINGFACE_EMBEDDING_BATCH_SIZE', 32),
         'llm_model' => env('HUGGINGFACE_LLM_MODEL', 'meta-llama/Llama-3.1-8B-Instruct'),
         'llm_max_tokens' => (int) env('HUGGINGFACE_LLM_MAX_TOKENS', 800),
     ],

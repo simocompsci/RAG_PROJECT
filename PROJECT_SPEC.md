@@ -3,13 +3,13 @@ I want to build a **RAG Q&A application for client-service employees**. Internal
 **Tech stack:**
 - Frontend: Next.js + TypeScript + Tailwind CSS (chat-only interface)
 - Backend: Laravel 13 (REST API and ingestion commands)
-- Lexical search: Elasticsearch (BM25)
-- Vector search: Pinecone
-- AI models: Hugging Face (embeddings + LLM)
-- Infrastructure: Docker
+- Retrieval and storage: Pinecone document index
+- Embeddings: Pinecone hosted embeddings (`llama-text-embed-v2`, 1024 dimensions)
+- Lexical search: Pinecone full-text search (BM25)
+- AI answer generation: Hugging Face LLM
 
-The ingestion command extracts text from the PDFs in `documents/`, splits it into chunks, indexes them in Elasticsearch, stores their embeddings in Pinecone, and combines both search results using **hybrid search with Reciprocal Rank Fusion (RRF)** before generating grounded answers with citations.
+The ingestion command extracts text from the PDFs in `documents/`, splits it into page-aware chunks, and writes them to Pinecone. Pinecone embeds each chunk automatically and indexes the same text field for BM25. A query runs a dense search and a lexical search, combines both ranked lists with **Reciprocal Rank Fusion (RRF)**, and generates a grounded answer with citations.
 
 There is no PDF upload from the UI and no document management screen. No PostgreSQL, authentication, or user accounts. Automated tests are deferred for the MVP.
 
-First, help me set up the project structure and implement it step by step. Keep the architecture clean and avoid unnecessary complexity.
+Keep the architecture clean and avoid unnecessary complexity.

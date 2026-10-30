@@ -8,10 +8,8 @@ See [PLAN.md](PLAN.md) for the full architecture and implementation plan.
 
 - Next.js + TypeScript + Tailwind CSS (chat UI)
 - Laravel 13 (ingestion commands + query API)
-- Elasticsearch (BM25)
-- Pinecone (vector search)
-- Hugging Face (embeddings + LLM)
-- Docker (Elasticsearch)
+- Pinecone document index (hosted embeddings + full-text search)
+- Hugging Face (answer-generation LLM)
 
 ## Setup
 
@@ -36,19 +34,48 @@ Set these values in `backend/.env`:
 
 ```env
 PINECONE_API_KEY=...
-PINECONE_INDEX=...
+PINECONE_INDEX=rag-embeddings
 HUGGINGFACE_API_KEY=...
 ```
 
-The model settings have working defaults and can be replaced:
+The Pinecone index must be a document index with a string field named `chunk_text` that has both integrated embedding and full-text search enabled. The expected model is `llama-text-embed-v2` at 1024 dimensions:
 
-```env
-HUGGINGFACE_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
-HUGGINGFACE_EMBEDDING_DIMENSIONS=384
-HUGGINGFACE_LLM_MODEL=meta-llama/Llama-3.1-8B-Instruct
+```json
+{
+  "schema": {
+    "fields": {
+      "chunk_text": {
+        "type": "string",
+        "embed": {
+          "model": "llama-text-embed-v2",
+          "dimension": 1024
+        },
+        "full_text_search": {
+          "language": "en"
+        }
+      }
+    }
+  }
+}
 ```
 
-If you change the embedding model, update `HUGGINGFACE_EMBEDDING_DIMENSIONS` and make the Pinecone index dimension match. `rag:setup` creates the Pinecone index if it does not exist.
+Other Pinecone settings:
+
+```env
+PINECONE_HOST=
+PINECONE_NAMESPACE=__default__
+PINECONE_TEXT_FIELD=chunk_text
+PINECONE_EMBEDDING_MODEL=llama-text-embed-v2
+PINECONE_EMBEDDING_DIMENSIONS=1024
+```
+
+`rag:setup` verifies the existing index or creates it when it does not exist.
+
+The answer model has a working default and can be replaced:
+
+```env
+HUGGINGFACE_LLM_MODEL=meta-llama/Llama-3.1-8B-Instruct
+```
 
 Frontend (optional, defaults to `http://localhost:8000`):
 
@@ -57,13 +84,7 @@ cd frontend
 cp .env.example .env.local
 ```
 
-### 3. Start Elasticsearch
-
-```sh
-docker compose up -d elasticsearch
-```
-
-### 4. Add documents and ingest
+### 3. Add documents and ingest
 
 Put the internal client-service PDFs in `documents/`, then run:
 
@@ -76,12 +97,12 @@ php artisan rag:ingest
 Useful ingestion options:
 
 ```sh
-php artisan rag:ingest --fresh                  # clear both indexes and re-ingest
+php artisan rag:ingest --fresh                  # clear the Pinecone namespace and re-ingest
 php artisan rag:ingest --force                  # re-ingest unchanged documents
 php artisan rag:ingest --only=refund-policy.pdf
 ```
 
-### 5. Run the app
+### 4. Run the app
 
 ```sh
 cd backend && php artisan serve
@@ -90,9 +111,17 @@ cd frontend && npm run dev
 
 Open `http://localhost:3000` and ask a customer question.
 
+## How retrieval works
+
+- Ingestion chunks each PDF and writes documents to Pinecone with `chunk_text`, document/page metadata, and a content hash.
+- Pinecone embeds `chunk_text` automatically using the index's hosted model.
+- Queries run two Pinecone searches: dense (`embed`) and lexical (`text`), then fuse the ranked lists with Reciprocal Rank Fusion.
+- The top chunks are passed to Hugging Face for answer generation with numbered citations.
+
 ## Notes
 
 - There is no PDF upload or document management UI. The `documents/` folder is the source of truth.
+- Pinecone deletes and newly upserted documents can take a short time to become fully consistent.
 - Automated tests are intentionally deferred for this MVP.
 - Quality checks:
 

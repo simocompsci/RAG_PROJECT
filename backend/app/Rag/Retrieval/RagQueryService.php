@@ -2,7 +2,6 @@
 
 namespace App\Rag\Retrieval;
 
-use App\Rag\Clients\ElasticsearchClient;
 use App\Rag\Clients\HuggingFaceClient;
 use App\Rag\Clients\PineconeClient;
 use Illuminate\Support\Str;
@@ -20,72 +19,71 @@ Rules:
 - Be concise, accurate, and professional.
 PROMPT;
 
+    private string $textField;
+
     public function __construct(
-        private readonly ElasticsearchClient $elasticsearch,
         private readonly PineconeClient $pinecone,
         private readonly HuggingFaceClient $huggingFace,
         private readonly RrfRanker $rrfRanker,
-    ) {}
+    ) {
+        $this->textField = (string) config('rag.pinecone.text_field');
+    }
 
     /**
      * @return array{answer: string, sources: array<int, array>}
      */
     public function ask(string $question): array
     {
-        $questionEmbedding = $this->huggingFace->embed([$question])[0];
+        $denseMatches = $this->pinecone->searchDense(
+            $question,
+            (int) config('rag.top_k_vector'),
+        );
 
-        $lexicalHits = $this->elasticsearch->searchChunks(
+        $lexicalMatches = $this->pinecone->searchLexical(
             $question,
             (int) config('rag.top_k_lexical'),
         );
 
-        $vectorMatches = $this->pinecone->query(
-            $questionEmbedding,
-            (int) config('rag.top_k_vector'),
-        );
+        $matchesById = [];
 
-        $lexicalIds = array_values(array_filter(
-            array_map(
-                fn (array $hit): ?string => $hit['_source']['chunk_id'] ?? null,
-                $lexicalHits,
-            ),
-        ));
+        foreach ([$denseMatches, $lexicalMatches] as $matches) {
+            foreach ($matches as $match) {
+                $matchId = $match['_id'] ?? null;
 
-        $vectorIds = array_values(array_filter(
-            array_map(
-                fn (array $match): ?string => $match['id'] ?? null,
-                $vectorMatches,
-            ),
-        ));
+                if (is_string($matchId) && $matchId !== '') {
+                    $matchesById[$matchId] = $match;
+                }
+            }
+        }
 
         $fused = $this->rrfRanker->fuse(
-            [$lexicalIds, $vectorIds],
+            [
+                $this->matchIds($denseMatches),
+                $this->matchIds($lexicalMatches),
+            ],
             (int) config('rag.rrf_k'),
         );
 
         $topChunks = array_slice($fused, 0, (int) config('rag.top_k_final'));
-        $chunks = $this->elasticsearch->getChunks(
-            array_column($topChunks, 'chunk_id'),
-        );
-
         $sources = [];
 
         foreach ($topChunks as $ranked) {
-            $chunk = $chunks[$ranked['chunk_id']] ?? null;
+            $match = $matchesById[$ranked['chunk_id']] ?? null;
+            $content = $match[$this->textField] ?? null;
 
-            if ($chunk === null) {
+            if (! is_string($content) || trim($content) === '') {
                 continue;
             }
 
             $sources[] = [
                 'index' => count($sources) + 1,
-                'document_id' => $chunk['document_id'],
-                'document_name' => $chunk['document_name'],
-                'page' => (int) $chunk['page'],
-                'chunk_id' => $chunk['chunk_id'],
-                'snippet' => Str::limit($chunk['content'], 500),
+                'document_id' => (string) ($match['document_id'] ?? ''),
+                'document_name' => (string) ($match['document_name'] ?? ''),
+                'page' => (int) ($match['page'] ?? 0),
+                'chunk_id' => $ranked['chunk_id'],
+                'snippet' => Str::limit($content, 500),
                 'rrf_score' => round($ranked['rrf_score'], 6),
-                'content' => $chunk['content'],
+                'content' => $content,
             ];
         }
 
@@ -104,11 +102,31 @@ PROMPT;
         foreach ($sources as &$source) {
             unset($source['content']);
         }
+        unset($source);
 
         return [
             'answer' => $answer,
             'sources' => $sources,
         ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $matches
+     * @return array<int, string>
+     */
+    private function matchIds(array $matches): array
+    {
+        $ids = [];
+
+        foreach ($matches as $match) {
+            $matchId = $match['_id'] ?? null;
+
+            if (is_string($matchId) && $matchId !== '') {
+                $ids[] = $matchId;
+            }
+        }
+
+        return array_values(array_unique($ids));
     }
 
     /**

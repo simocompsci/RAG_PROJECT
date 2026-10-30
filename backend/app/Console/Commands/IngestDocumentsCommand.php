@@ -2,13 +2,11 @@
 
 namespace App\Console\Commands;
 
-use App\Rag\Clients\ElasticsearchClient;
 use App\Rag\Clients\PineconeClient;
 use App\Rag\Ingestion\DocumentIngestor;
 use Illuminate\Console\Command;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
-use RuntimeException;
 use SplFileInfo;
 use Throwable;
 
@@ -19,13 +17,10 @@ class IngestDocumentsCommand extends Command
         {--force : Re-ingest documents even when their contents are unchanged}
         {--only= : Comma-separated list of filenames to ingest}';
 
-    protected $description = 'Chunk, embed, and index the PDFs in the documents folder';
+    protected $description = 'Chunk and index the PDFs in the documents folder in Pinecone';
 
-    public function handle(
-        ElasticsearchClient $elasticsearch,
-        PineconeClient $pinecone,
-        DocumentIngestor $ingestor,
-    ): int {
+    public function handle(PineconeClient $pinecone, DocumentIngestor $ingestor): int
+    {
         set_time_limit(0);
 
         $documentsPath = $this->resolveDocumentsPath();
@@ -46,7 +41,12 @@ class IngestDocumentsCommand extends Command
         }
 
         try {
-            $this->prepareIndexes($elasticsearch, $pinecone);
+            $pinecone->ensureIndex();
+
+            if ($this->option('fresh')) {
+                $this->line('Clearing existing documents...');
+                $pinecone->deleteAllDocuments();
+            }
         } catch (Throwable $exception) {
             $this->error($exception->getMessage());
 
@@ -85,29 +85,6 @@ class IngestDocumentsCommand extends Command
         $this->info("Done. {$indexed} indexed, {$skipped} skipped, {$failed} failed.");
 
         return $failed > 0 ? self::FAILURE : self::SUCCESS;
-    }
-
-    private function prepareIndexes(
-        ElasticsearchClient $elasticsearch,
-        PineconeClient $pinecone,
-    ): void {
-        $dimensions = (int) config('rag.huggingface.embedding_dimensions');
-
-        if ($dimensions <= 0) {
-            throw new RuntimeException('HUGGINGFACE_EMBEDDING_DIMENSIONS must be greater than zero.');
-        }
-
-        $elasticsearch->createIndexes();
-        $pinecone->ensureIndex($dimensions);
-
-        if (! $this->option('fresh')) {
-            return;
-        }
-
-        $this->line('Clearing existing indexes...');
-        $elasticsearch->deleteIndexes();
-        $elasticsearch->createIndexes();
-        $pinecone->deleteAll();
     }
 
     private function resolveDocumentsPath(): string

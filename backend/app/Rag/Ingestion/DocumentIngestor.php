@@ -2,20 +2,20 @@
 
 namespace App\Rag\Ingestion;
 
-use App\Rag\Clients\ElasticsearchClient;
-use App\Rag\Clients\HuggingFaceClient;
 use App\Rag\Clients\PineconeClient;
 use RuntimeException;
 
 class DocumentIngestor
 {
+    private string $textField;
+
     public function __construct(
-        private readonly ElasticsearchClient $elasticsearch,
         private readonly PineconeClient $pinecone,
-        private readonly HuggingFaceClient $huggingFace,
         private readonly PdfExtractor $pdfExtractor,
         private readonly TextChunker $chunker,
-    ) {}
+    ) {
+        $this->textField = (string) config('rag.pinecone.text_field');
+    }
 
     /**
      * @return array{status: string, document_id: string, page_count: int, chunk_count: int}
@@ -29,7 +29,7 @@ class DocumentIngestor
         }
 
         $documentId = substr(hash('sha256', $relativePath), 0, 32);
-        $existing = $this->elasticsearch->getDocument($documentId);
+        $existing = $this->pinecone->firstChunkForDocument($documentId);
 
         if (! $force && $existing !== null && ($existing['content_hash'] ?? null) === $contentHash) {
             return [
@@ -51,69 +51,39 @@ class DocumentIngestor
             throw new RuntimeException('The document did not produce any text chunks.');
         }
 
-        $embeddings = $this->huggingFace->embed(array_column($chunks, 'content'));
-
-        if (count($embeddings) !== count($chunks)) {
-            throw new RuntimeException('Embedding count does not match the chunk count.');
-        }
-
         $documentName = basename($relativePath);
         $now = now()->toIso8601String();
-        $createdAt = $existing['created_at'] ?? $now;
+        $createdAt = (string) ($existing['created_at'] ?? $now);
+        $pageCount = count($pages);
+        $chunkCount = count($chunks);
 
-        $chunkDocuments = [];
-        $vectors = [];
+        $documents = [];
 
         foreach ($chunks as $index => $chunk) {
-            $chunkId = "{$documentId}:{$index}";
-
-            $chunkSource = [
-                'chunk_id' => $chunkId,
+            $documents[] = [
+                '_id' => "{$documentId}:{$index}",
+                $this->textField => $chunk['content'],
                 'document_id' => $documentId,
                 'document_name' => $documentName,
                 'source_path' => $relativePath,
                 'page' => $chunk['page'],
                 'chunk_index' => $index,
-                'content' => $chunk['content'],
-                'created_at' => $now,
-            ];
-
-            $chunkDocuments[] = ['_id' => $chunkId, 'source' => $chunkSource];
-
-            $vectors[] = [
-                'id' => $chunkId,
-                'values' => $embeddings[$index],
-                'metadata' => [
-                    'document_id' => $documentId,
-                    'document_name' => $documentName,
-                    'page' => $chunk['page'],
-                    'chunk_index' => $index,
-                ],
+                'content_hash' => $contentHash,
+                'page_count' => $pageCount,
+                'chunk_count' => $chunkCount,
+                'created_at' => $createdAt,
+                'updated_at' => $now,
             ];
         }
 
-        $this->elasticsearch->deleteChunksForDocument($documentId);
         $this->pinecone->deleteForDocument($documentId);
-
-        $this->elasticsearch->bulkIndexChunks($chunkDocuments);
-        $this->pinecone->upsert($vectors);
-
-        $this->elasticsearch->indexDocument($documentId, [
-            'document_id' => $documentId,
-            'document_name' => $documentName,
-            'source_path' => $relativePath,
-            'content_hash' => $contentHash,
-            'page_count' => count($pages),
-            'chunk_count' => count($chunks),
-            'created_at' => $createdAt,
-            'updated_at' => $now,
-        ]);
+        $this->pinecone->upsertDocuments($documents);
 
         return [
             'status' => 'indexed',
             'document_id' => $documentId,
-            'page_count' => count($pages),
-            'chunk_count' => count($chunks),
+            'page_count' => $pageCount,
+            'chunk_count' => $chunkCount,
         ];
     }
 }
