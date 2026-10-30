@@ -38,7 +38,7 @@ const welcomeMessage: ChatMessage = {
   id: "welcome",
   role: "assistant",
   content:
-    "Hi! I'm your client-service assistant. Ask me a question a customer has brought to you, and I'll look it up in our internal procedures and policies.",
+    "Hi! I'm your AI assistant. Ask me a question a customer has brought to you, and I'll look it up in our internal procedures and policies.",
 };
 
 export default function Chat() {
