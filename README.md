@@ -9,7 +9,7 @@ See [PLAN.md](PLAN.md) for the full architecture and implementation plan.
 - Next.js + TypeScript + Tailwind CSS (chat UI)
 - Laravel 13 (ingestion commands + query API)
 - Pinecone document index (hosted embeddings + full-text search)
-- Hugging Face (answer-generation LLM)
+- Groq (answer-generation LLM)
 
 ## Setup
 
@@ -35,7 +35,7 @@ Set these values in `backend/.env`:
 ```env
 PINECONE_API_KEY=...
 PINECONE_INDEX=rag-embeddings
-HUGGINGFACE_API_KEY=...
+GROQ_API_KEY=...
 ```
 
 The Pinecone index must be a document index with a string field named `chunk_text` that has both integrated embedding and full-text search enabled. The expected model is `llama-text-embed-v2` at 1024 dimensions:
@@ -74,7 +74,10 @@ PINECONE_EMBEDDING_DIMENSIONS=1024
 The answer model has a working default and can be replaced:
 
 ```env
-HUGGINGFACE_LLM_MODEL=meta-llama/Llama-3.1-8B-Instruct
+GROQ_BASE_URL=https://api.groq.com/openai/v1
+GROQ_MODEL=openai/gpt-oss-120b
+GROQ_MAX_TOKENS=1200
+GROQ_REASONING_EFFORT=low
 ```
 
 Frontend (optional, defaults to `http://localhost:8000`):
@@ -116,12 +119,13 @@ Open `http://localhost:3000` and ask a customer question.
 - Ingestion chunks each PDF and writes documents to Pinecone with `chunk_text`, document/page metadata, and a content hash.
 - Pinecone embeds `chunk_text` automatically using the index's hosted model.
 - Queries run two Pinecone searches: dense (`embed`) and lexical (`text`), then fuse the ranked lists with Reciprocal Rank Fusion.
-- The top chunks are passed to Hugging Face for answer generation with numbered citations.
+- The top chunks are passed to Groq for answer generation with numbered citations.
 
 ## Notes
 
 - There is no PDF upload or document management UI. The `documents/` folder is the source of truth.
 - Pinecone deletes and newly upserted documents can take a short time to become fully consistent.
+- The Groq free tier has a tokens-per-minute limit. The defaults keep one request under it; wait a minute between rapid queries or use a paid tier.
 - Automated tests are intentionally deferred for this MVP.
 - Quality checks:
 

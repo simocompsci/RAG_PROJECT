@@ -6,7 +6,7 @@ I want to build a **RAG Q&A application for client-service employees**. Internal
 - Retrieval and storage: Pinecone document index
 - Embeddings: Pinecone hosted embeddings (`llama-text-embed-v2`, 1024 dimensions)
 - Lexical search: Pinecone full-text search (BM25)
-- AI answer generation: Hugging Face LLM
+- AI answer generation: Groq LLM (`openai/gpt-oss-120b`)
 
 The ingestion command extracts text from the PDFs in `documents/`, splits it into page-aware chunks, and writes them to Pinecone. Pinecone embeds each chunk automatically and indexes the same text field for BM25. A query runs a dense search and a lexical search, combines both ranked lists with **Reciprocal Rank Fusion (RRF)**, and generates a grounded answer with citations.
 

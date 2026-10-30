@@ -6,22 +6,25 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
-class HuggingFaceClient
+class GroqClient
 {
     private ?string $apiKey;
 
     private string $baseUrl;
 
-    private string $llmModel;
+    private string $model;
 
-    private int $llmMaxTokens;
+    private int $maxTokens;
+
+    private ?string $reasoningEffort;
 
     public function __construct()
     {
-        $this->apiKey = config('rag.huggingface.api_key');
-        $this->baseUrl = rtrim((string) config('rag.huggingface.base_url'), '/');
-        $this->llmModel = (string) config('rag.huggingface.llm_model');
-        $this->llmMaxTokens = (int) config('rag.huggingface.llm_max_tokens');
+        $this->apiKey = config('rag.groq.api_key');
+        $this->baseUrl = rtrim((string) config('rag.groq.base_url'), '/');
+        $this->model = (string) config('rag.groq.model');
+        $this->maxTokens = (int) config('rag.groq.max_tokens');
+        $this->reasoningEffort = config('rag.groq.reasoning_effort');
     }
 
     public function isConfigured(): bool
@@ -33,20 +36,26 @@ class HuggingFaceClient
     {
         $this->ensureConfigured();
 
-        $response = $this->request('POST', $this->endpoint('/chat/completions'), [
-            'model' => $this->llmModel,
+        $body = [
+            'model' => $this->model,
             'messages' => [
                 ['role' => 'system', 'content' => $systemPrompt],
                 ['role' => 'user', 'content' => $userPrompt],
             ],
             'temperature' => 0.1,
-            'max_tokens' => $this->llmMaxTokens,
-        ]);
+            'max_tokens' => $this->maxTokens,
+        ];
+
+        if (filled($this->reasoningEffort)) {
+            $body['reasoning_effort'] = $this->reasoningEffort;
+        }
+
+        $response = $this->request('POST', $this->endpoint('/chat/completions'), $body);
 
         $content = $response->json('choices.0.message.content');
 
         if (! is_string($content) || trim($content) === '') {
-            throw new RuntimeException('Hugging Face returned an empty chat completion.');
+            throw new RuntimeException('Groq returned an empty chat completion.');
         }
 
         return trim($content);
@@ -65,7 +74,7 @@ class HuggingFaceClient
     {
         if (! $this->isConfigured()) {
             throw new RuntimeException(
-                'Hugging Face is not configured. Set HUGGINGFACE_API_KEY in backend/.env.',
+                'Groq is not configured. Set GROQ_API_KEY in backend/.env.',
             );
         }
     }
@@ -85,7 +94,7 @@ class HuggingFaceClient
         $details = mb_substr($response->body(), 0, 500);
 
         throw new RuntimeException(
-            "Hugging Face request {$url} failed with status {$response->status()}: {$details}",
+            "Groq request {$url} failed with status {$response->status()}: {$details}",
         );
     }
 }

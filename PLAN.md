@@ -21,7 +21,7 @@ documents/*.pdf
   -> employee asks a customer question
   -> Pinecone dense search + Pinecone lexical search
   -> Reciprocal Rank Fusion
-  -> Hugging Face LLM
+  -> Groq LLM
   -> answer + source citations
 ```
 
@@ -31,7 +31,7 @@ documents/*.pdf
 - **Pinecone** is the only retrieval/storage service. One document index stores:
   - `chunk_text`, which supports integrated embedding and full-text search;
   - chunk/document metadata used for sources, filtering, and incremental ingestion.
-- **Hugging Face** is used only for answer generation.
+- **Groq** is used only for answer generation through its OpenAI-compatible chat completions API.
 - **Laravel 13** provides the ingestion command and the query API, and orchestrates chunking, indexing, hybrid retrieval, RRF, LLM generation, and citations.
 - **Next.js + TypeScript + Tailwind CSS** provides a chat-only interface for client-service employees.
 - Ingestion runs from the CLI, not from the UI. It is synchronous for the MVP.
@@ -191,7 +191,7 @@ Pinecone updates and deletes are asynchronous. The client polls fetch/list endpo
 score = sum(1 / (k + rank))
 ```
 
-4. Keep the top 8 chunks, build source citations, and pass the context to Hugging Face.
+4. Keep the top 5 chunks, build source citations, and pass the context to Groq.
 5. Return the generated answer and source metadata.
 
 Pinecone cannot combine `embed` and `text` in one search request, so hybrid retrieval uses two requests plus local RRF.
@@ -211,17 +211,18 @@ PINECONE_EMBEDDING_DIMENSIONS=1024
 PINECONE_CLOUD=aws
 PINECONE_REGION=us-east-1
 
-HUGGINGFACE_API_KEY=
-HUGGINGFACE_BASE_URL=https://router.huggingface.co
-HUGGINGFACE_LLM_MODEL=meta-llama/Llama-3.1-8B-Instruct
-HUGGINGFACE_LLM_MAX_TOKENS=800
+GROQ_API_KEY=
+GROQ_BASE_URL=https://api.groq.com/openai/v1
+GROQ_MODEL=openai/gpt-oss-120b
+GROQ_MAX_TOKENS=1200
+GROQ_REASONING_EFFORT=low
 
 RAG_DOCUMENTS_PATH=../documents
 RAG_CHUNK_SIZE=4000
 RAG_CHUNK_OVERLAP=600
 RAG_TOP_K_LEXICAL=20
 RAG_TOP_K_VECTOR=20
-RAG_TOP_K_FINAL=8
+RAG_TOP_K_FINAL=5
 RAG_RRF_K=60
 ```
 
@@ -235,7 +236,7 @@ backend/
   app/Console/Commands/SetupRagCommand.php      verify/create Pinecone index
   app/Console/Commands/IngestDocumentsCommand.php
   app/Rag/Clients/PineconeClient.php            Documents API client
-  app/Rag/Clients/HuggingFaceClient.php         chat completions only
+  app/Rag/Clients/GroqClient.php                Groq chat completions client
   app/Rag/Ingestion/DocumentIngestor.php
   app/Rag/Ingestion/PdfExtractor.php
   app/Rag/Ingestion/TextChunker.php
@@ -280,6 +281,7 @@ Expect a grounded answer and citations. After ingestion, Pinecone may take up to
 ## 10. Constraints
 
 - No automated tests for the MVP.
+- The Groq free tier rate limit is why `top_k_final` defaults to 5 and `GROQ_MAX_TOKENS` to 1200.
 - No authentication, user accounts, or database tables for RAG data.
 - No document management UI.
 - Keep the implementation minimal, readable, and maintainable.

@@ -275,6 +275,7 @@ class PineconeClient
                     'updated_at',
                 ],
             ],
+            allowNotFound: true,
         );
 
         return $response['matches'] ?? [];

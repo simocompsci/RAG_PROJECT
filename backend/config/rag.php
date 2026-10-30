@@ -31,7 +31,7 @@ return [
 
     'top_k_lexical' => (int) env('RAG_TOP_K_LEXICAL', 20),
     'top_k_vector' => (int) env('RAG_TOP_K_VECTOR', 20),
-    'top_k_final' => (int) env('RAG_TOP_K_FINAL', 8),
+    'top_k_final' => (int) env('RAG_TOP_K_FINAL', 5),
     'rrf_k' => (int) env('RAG_RRF_K', 60),
 
     /*
@@ -60,18 +60,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Hugging Face
+    | Groq
     |--------------------------------------------------------------------------
     |
-    | The router exposes an OpenAI-compatible chat completions API under /v1.
+    | Groq exposes an OpenAI-compatible chat completions API under /openai/v1.
     |
     */
 
-    'huggingface' => [
-        'api_key' => env('HUGGINGFACE_API_KEY'),
-        'base_url' => env('HUGGINGFACE_BASE_URL', 'https://router.huggingface.co'),
-        'llm_model' => env('HUGGINGFACE_LLM_MODEL', 'meta-llama/Llama-3.1-8B-Instruct'),
-        'llm_max_tokens' => (int) env('HUGGINGFACE_LLM_MAX_TOKENS', 800),
+    'groq' => [
+        'api_key' => env('GROQ_API_KEY'),
+        'base_url' => env('GROQ_BASE_URL', 'https://api.groq.com/openai/v1'),
+        'model' => env('GROQ_MODEL', 'openai/gpt-oss-120b'),
+        'max_tokens' => (int) env('GROQ_MAX_TOKENS', 1200),
+        'reasoning_effort' => env('GROQ_REASONING_EFFORT', 'low'),
     ],
 
 ];
