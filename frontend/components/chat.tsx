@@ -43,7 +43,6 @@ const welcomeMessage: ChatMessage = {
 
 export default function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
-  const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   async function send(question: string) {
@@ -57,7 +56,6 @@ export default function Chat() {
       ...current,
       { id: crypto.randomUUID(), role: "user", content: trimmed },
     ]);
-    setInput("");
     setIsLoading(true);
 
     try {
@@ -90,42 +88,55 @@ export default function Chat() {
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    void send(input);
-  }
+  const hasConversation = messages.some((message) => message.role === "user");
 
-  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      void send(input);
-    }
-  }
+  if (!hasConversation) {
+    return (
+      <div className="flex min-h-dvh flex-col bg-background text-foreground">
+        <main className="mx-auto flex w-full max-w-3xl flex-1 items-center justify-center px-4 py-10 sm:px-6">
+          <div className="flex w-full max-w-2xl flex-col gap-8">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <div className="flex size-14 items-center justify-center rounded-[3px] bg-primary text-primary-foreground shadow-sm">
+                <BotIcon className="size-10" />
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                  Client Service Assistant
+                </h1>
+                <p className="mx-auto max-w-lg text-sm leading-relaxed text-muted-foreground sm:text-base">
+                  {welcomeMessage.content}
+                </p>
+              </div>
+            </div>
 
-  const showStarters = messages.length === 1 && !isLoading;
+            <div className="space-y-3">
+              <p className="text-center text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Try asking
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {starterQuestions.map((question) => (
+                  <Button
+                    key={question}
+                    type="button"
+                    variant="outline"
+                    onClick={() => void send(question)}
+                    className="h-auto justify-start whitespace-normal rounded-xl px-3 py-2.5 text-left text-sm font-normal text-muted-foreground"
+                  >
+                    {question}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <ChatComposer onSend={send} isLoading={isLoading} autoFocus />
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
-      <header className="border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-3xl items-center gap-3 px-4 py-4 sm:px-6">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <BotIcon className="size-5" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-sm font-semibold sm:text-base">
-              Client Service Assistant
-            </h1>
-            <p className="truncate text-xs text-muted-foreground">
-              Answers grounded in internal procedures and policies
-            </p>
-          </div>
-          <span className="ml-auto hidden items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground sm:flex">
-            <span className="size-1.5 rounded-full bg-emerald-500" />
-            Internal knowledge base
-          </span>
-        </div>
-      </header>
-
       <main className="mx-auto flex w-full max-w-3xl min-h-0 flex-1 flex-col px-4 sm:px-6">
         <div className="min-h-0 flex-1">
           <MessageScrollerProvider autoScroll defaultScrollPosition="end">
@@ -141,22 +152,6 @@ export default function Chat() {
                       <ChatBubble message={message} />
                     </MessageScrollerItem>
                   ))}
-
-                  {showStarters && (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {starterQuestions.map((question) => (
-                        <Button
-                          key={question}
-                          type="button"
-                          variant="outline"
-                          onClick={() => void send(question)}
-                          className="h-auto justify-start whitespace-normal rounded-xl px-3 py-2.5 text-left text-sm font-normal text-muted-foreground"
-                        >
-                          {question}
-                        </Button>
-                      ))}
-                    </div>
-                  )}
 
                   {isLoading && (
                     <MessageScrollerItem messageId="loading" className="pb-1">
@@ -179,38 +174,78 @@ export default function Chat() {
           </MessageScrollerProvider>
         </div>
 
-        <form onSubmit={handleSubmit} className="py-4">
-          <InputGroup className="h-auto rounded-2xl bg-card p-2 shadow-sm">
-            <InputGroupTextarea
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={2}
-              placeholder="Ask a question from a customer..."
-              disabled={isLoading}
-              className="min-h-12 px-2 py-2 text-sm"
-            />
-            <InputGroupAddon
-              align="block-end"
-              className="justify-between border-t border-border px-1 pt-2"
-            >
-              <span className="text-[11px] text-muted-foreground">
-                Enter to send · Shift + Enter for a new line
-              </span>
-              <InputGroupButton
-                type="submit"
-                variant="default"
-                size="sm"
-                disabled={isLoading || input.trim() === ""}
-              >
-                {isLoading ? "Searching..." : "Send"}
-                <SendHorizontalIcon />
-              </InputGroupButton>
-            </InputGroupAddon>
-          </InputGroup>
-        </form>
+        <ChatComposer onSend={send} isLoading={isLoading} />
       </main>
     </div>
+  );
+}
+
+function ChatComposer({
+  onSend,
+  isLoading,
+  autoFocus = false,
+}: {
+  onSend: (question: string) => Promise<void>;
+  isLoading: boolean;
+  autoFocus?: boolean;
+}) {
+  const [value, setValue] = useState("");
+
+  async function submit() {
+    const question = value.trim();
+
+    if (question === "" || isLoading) {
+      return;
+    }
+
+    setValue("");
+    await onSend(question);
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void submit();
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void submit();
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="py-4">
+      <InputGroup className="h-auto rounded-2xl bg-card p-2 shadow-sm">
+        <InputGroupTextarea
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={handleKeyDown}
+          rows={2}
+          autoFocus={autoFocus}
+          placeholder="Ask a question from a customer..."
+          disabled={isLoading}
+          className="min-h-12 px-2 py-2 text-sm"
+        />
+        <InputGroupAddon
+          align="block-end"
+          className="justify-between border-t border-border px-1 pt-2"
+        >
+          <span className="text-[11px] text-muted-foreground">
+            Enter to send · Shift + Enter for a new line
+          </span>
+          <InputGroupButton
+            type="submit"
+            variant="default"
+            size="sm"
+            disabled={isLoading || value.trim() === ""}
+          >
+            {isLoading ? "Searching..." : "Send"}
+            <SendHorizontalIcon />
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
+    </form>
   );
 }
 
