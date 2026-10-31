@@ -16,6 +16,7 @@ This is an end-to-end AI engineering project rather than a model demo. It covers
 
 ## Architecture
 
+![Architecture Diagram](docs/architecture.png)
 
 ### Request lifecycle
 
