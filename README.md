@@ -16,26 +16,6 @@ This is an end-to-end AI engineering project rather than a model demo. It covers
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    A["documents/*.pdf"] --> B["rag:ingest CLI"]
-    B --> C["PDF text extraction"]
-    C --> D["Page-aware chunker"]
-    D --> E["Pinecone document index"]
-    E --> F["Dense semantic search"]
-    E --> G["Lexical BM25 search"]
-    Q["Employee question"] --> H["Next.js chat UI"]
-    H --> I["POST /api/query"]
-    I --> J["Laravel RagQueryService"]
-    J --> F
-    J --> G
-    F --> K["Reciprocal Rank Fusion"]
-    G --> K
-    K --> L["Top 5 chunks"]
-    L --> M["Groq chat completion"]
-    M --> N["Grounded answer + citations"]
-    N --> H
-```
 
 ### Request lifecycle
 
@@ -51,11 +31,6 @@ flowchart LR
 ## RAG Pipeline
 
 ### Ingestion
-
-```text
-PDF -> SHA-256 content hash -> page extraction -> overlapping chunks
-    -> delete previous document chunks -> Pinecone upsert
-```
 
 The `rag:ingest` command:
 
@@ -383,65 +358,4 @@ Frontend configuration:
 | --- | --- | --- |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | Backend base URL |
 
-## Testing and Quality
 
-The MVP ships with Laravel's example tests only. There is no automated RAG evaluation suite yet; answer quality is currently checked manually against the sample corpus.
-
-Run the available checks:
-
-```sh
-cd backend
-php artisan test
-vendor/bin/pint --test
-```
-
-```sh
-cd frontend
-npm run lint
-npx tsc --noEmit
-npm run build
-```
-
-A practical evaluation set should eventually measure retrieval recall, citation correctness, answer groundedness, abstention on unanswerable questions, and latency. Those dimensions are listed under future improvements.
-
-## Security and Operational Notes
-
-- **No authentication or user accounts.** The API is intended for local or trusted internal deployment only. Add authentication and authorization before exposing it publicly.
-- **No application-level rate limiting or per-user quotas.** Groq's free tier limits tokens per minute; rapid queries can return HTTP 429. Wait about a minute or use a paid tier.
-- **Secrets stay server-side.** Pinecone and Groq keys are read only by the Laravel backend and are never sent to the browser.
-- **CORS is restricted.** `config/cors.php` allows the origin configured by `FRONTEND_URL` and does not support credentials.
-- **Upstream errors are sanitized.** API failures return a generic HTTP 502 message while the full exception is written to Laravel's logs.
-- **Retrieved content is untrusted.** The generation prompt isolates context and instructs the model to ignore embedded instructions.
-- **Pinecone is eventually consistent.** Newly upserted or deleted documents may take up to about a minute to appear or disappear from search results. Ingestion polls deletes but cannot force search consistency.
-- **No OCR.** Scanned or image-only PDFs must be OCR'd before ingestion.
-- **No conversation memory.** Each question is answered independently; prior chat turns are not sent to the model.
-- **No streaming responses.** The UI waits for the complete answer and source list before rendering.
-
-## Limitations and Future Improvements
-
-Current limitations are intentional for a focused MVP:
-
-- CLI-only ingestion; no upload, document list, status, or delete UI.
-- PDF-only corpus with no OCR fallback.
-- Single Pinecone namespace and no metadata filters.
-- No reranker between fusion and generation.
-- No automated retrieval or answer-quality evaluation.
-- No authentication, roles, audit trail, or per-user limits.
-- No conversation history or follow-up question rewriting.
-- No token streaming or cancellation.
-- No observability dashboard for retrieval quality, token usage, cost, or latency.
-
-High-value next steps:
-
-1. Add an evaluation dataset with retrieval recall, groundedness, citation accuracy, abstention, and latency targets.
-2. Add streaming responses and a cancel action to improve perceived latency.
-3. Introduce a reranker and test whether it improves top-five context quality.
-4. Add authentication, rate limiting, audit logging, and role-based access for internal deployment.
-5. Add OCR and richer PDF parsing for scanned or complex layouts.
-6. Add document management and metadata filters such as department, region, or effective date.
-7. Add tracing and dashboards for retrieval scores, token usage, failures, and response times.
-
-## Documentation
-
-- [PLAN.md](PLAN.md) — architecture, data model, and implementation plan
-- [PROJECT_SPEC.md](PROJECT_SPEC.md) — product goals and technology constraints
