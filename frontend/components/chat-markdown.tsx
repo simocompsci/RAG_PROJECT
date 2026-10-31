@@ -1,8 +1,46 @@
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { Root } from "mdast";
 import { cn } from "cn";
 
 import type { Source } from "@/lib/rag";
+
+type MarkdownNode = {
+  type: string;
+  depth?: number;
+  children?: MarkdownNode[];
+};
+
+function remarkBoldHeadings() {
+  return (tree: Root) => {
+    transformBoldHeadings(tree as unknown as MarkdownNode);
+  };
+}
+
+function transformBoldHeadings(node: MarkdownNode) {
+  if (!node.children) {
+    return;
+  }
+
+  node.children = node.children.map((child) => {
+    if (
+      child.type === "paragraph" &&
+      child.children?.length === 1 &&
+      child.children[0]?.type === "strong" &&
+      child.children[0].children?.length
+    ) {
+      return {
+        type: "heading",
+        depth: 3,
+        children: child.children[0].children,
+      };
+    }
+
+    transformBoldHeadings(child);
+
+    return child;
+  });
+}
 
 const markdownComponents: Components = {
   h1: ({ children }) => (
@@ -114,15 +152,24 @@ function linkCitations(content: string, sources: Source[]): string {
 
   const indexes = new Set(sources.map((source) => source.index));
 
-  return content.replace(/\[(\d+)\]/g, (match, value: string) => {
-    const index = Number(value);
+  return content
+    .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g)
+    .map((segment, position) => {
+      if (position % 2 === 1) {
+        return segment;
+      }
 
-    if (!indexes.has(index)) {
-      return match;
-    }
+      return segment.replace(/\[(\d+)\]/g, (match, value: string) => {
+        const index = Number(value);
 
-    return `[\\[${index}\\]](#source-${index})`;
-  });
+        if (!indexes.has(index)) {
+          return match;
+        }
+
+        return `[\\[${index}\\]](#source-${index})`;
+      });
+    })
+    .join("");
 }
 
 export function ChatMarkdown({
@@ -137,7 +184,7 @@ export function ChatMarkdown({
   return (
     <div className={cn("min-w-0", className)}>
       <Markdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkBoldHeadings]}
         components={markdownComponents}
         skipHtml
       >

@@ -1,5 +1,6 @@
 "use client";
 
+import { ChatMarkdown } from "@/components/chat-markdown";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +22,7 @@ import { askQuestion } from "@/lib/rag";
 import type { ChatMessage, Source } from "@/lib/rag";
 import {
   BotIcon,
+  CircleAlertIcon,
   LoaderCircleIcon,
   SendHorizontalIcon,
 } from "lucide-react";
@@ -136,13 +138,18 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-background text-foreground">
+    <div className="relative flex h-dvh flex-col overflow-hidden bg-background text-foreground">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-gradient-to-b from-background via-background/80 to-transparent backdrop-blur-md [mask-image:linear-gradient(to_bottom,black_35%,transparent)]"
+      />
+
       <main className="mx-auto flex w-full max-w-3xl min-h-0 flex-1 flex-col px-4 sm:px-6">
         <div className="min-h-0 flex-1">
           <MessageScrollerProvider autoScroll defaultScrollPosition="end">
             <MessageScroller>
               <MessageScrollerViewport>
-                <MessageScrollerContent className="py-6">
+                <MessageScrollerContent className="pt-16 pb-6">
                   {messages.map((message) => (
                     <MessageScrollerItem
                       key={message.id}
@@ -157,12 +164,10 @@ export default function Chat() {
                     <MessageScrollerItem messageId="loading" className="pb-1">
                       <Message align="start">
                         <MessageContent>
-                          <Bubble align="start" variant="muted">
-                            <BubbleContent className="flex items-center gap-2 text-muted-foreground">
-                              <LoaderCircleIcon className="size-4 animate-spin" />
-                              Searching the internal documents...
-                            </BubbleContent>
-                          </Bubble>
+                          <div className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
+                            <LoaderCircleIcon className="size-4 animate-spin" />
+                            Searching the internal documents...
+                          </div>
                         </MessageContent>
                       </Message>
                     </MessageScrollerItem>
@@ -252,15 +257,33 @@ function ChatComposer({
 function ChatBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
 
+  if (isUser) {
+    return (
+      <Message align="end">
+        <MessageContent>
+          <Bubble align="end" variant="default">
+            <BubbleContent>{message.content}</BubbleContent>
+          </Bubble>
+        </MessageContent>
+      </Message>
+    );
+  }
+
   return (
-    <Message align={isUser ? "end" : "start"}>
-      <MessageContent>
-        <Bubble
-          align={isUser ? "end" : "start"}
-          variant={message.isError ? "destructive" : isUser ? "default" : "muted"}
-        >
-          <BubbleContent>{message.content}</BubbleContent>
-        </Bubble>
+    <Message align="start">
+      <MessageContent className="gap-4">
+        {message.isError ? (
+          <div className="flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-3.5 py-3 text-sm leading-6 text-destructive">
+            <CircleAlertIcon className="mt-0.5 size-4 shrink-0" />
+            <span>{message.content}</span>
+          </div>
+        ) : (
+          <ChatMarkdown
+            content={message.content}
+            sources={message.sources}
+            className="py-0.5"
+          />
+        )}
 
         {message.sources && message.sources.length > 0 && (
           <SourceList sources={message.sources} />
@@ -272,7 +295,7 @@ function ChatBubble({ message }: { message: ChatMessage }) {
 
 function SourceList({ sources }: { sources: Source[] }) {
   return (
-    <div className="flex flex-col gap-2 pt-0.5">
+    <div className="flex flex-col gap-2">
       <p className="px-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
         Sources
       </p>
@@ -280,21 +303,24 @@ function SourceList({ sources }: { sources: Source[] }) {
       {sources.map((source) => (
         <details
           key={source.chunk_id}
-          className="group rounded-lg border border-border bg-card"
+          id={`source-${source.index}`}
+          className="group scroll-mt-24 overflow-hidden rounded-xl border border-border bg-card transition-colors open:bg-muted/20 hover:border-border/80"
         >
-          <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs text-card-foreground">
-            <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] font-semibold text-muted-foreground">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-xs text-card-foreground [&::-webkit-details-marker]:hidden">
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border bg-background text-[10px] font-semibold text-muted-foreground group-open:border-foreground/20 group-open:text-foreground">
               {source.index}
             </span>
             <span className="min-w-0 flex-1 truncate font-medium">
               {source.document_name}
             </span>
-            <span className="shrink-0 text-muted-foreground">p. {source.page}</span>
-            <span className="shrink-0 text-muted-foreground transition group-open:rotate-180">
+            <span className="shrink-0 text-muted-foreground">
+              p. {source.page}
+            </span>
+            <span className="shrink-0 text-muted-foreground transition-transform group-open:rotate-180">
               ▾
             </span>
           </summary>
-          <p className="border-t border-border px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+          <p className="border-t border-border/70 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
             {source.snippet}
           </p>
         </details>
